@@ -3,6 +3,9 @@
 **Engineered for MySQL 8.0, Python (Flask with raw `mysql-connector-python`), and Bootstrap 5 + Vanilla JavaScript.**  
 *Strictly No ORM (No SQLAlchemy) — Transparent Relational Logic, Raw Parameterized SQL, Stored Procedures, Triggers, Views, and ACID Transactions.*
 
+**Author & Developer:** [`pathfind3er`](https://github.com/pathfind3er)  
+**Project Repository:** [github.com/pathfind3er/food-rescue-network](https://github.com/pathfind3er/food-rescue-network)  
+
 ---
 
 ## 📋 Table of Contents
@@ -298,6 +301,14 @@ Follow these 5 exact test cases in front of your examiner to demonstrate complet
 | **Q4: Why use `ON DELETE CASCADE` on `claims` but `ON DELETE SET NULL` on `audit_logs`?** | *"If a food batch is deleted, its associated claim is no longer actionable, so cascading deletion preserves referential integrity. However, an audit ledger must remain an immutable legal record; deleting a batch or actor should never erase historical transaction logs, so foreign keys in `audit_logs` are set to `NULL`."* |
 | **Q5: How does your trigger calculate CO₂ emissions offset?** | *"`trg_after_claim_completed` executes upon `UPDATE ON claims` when status becomes `'COMPLETED'`. It reads the batch weight in kg and computes $\text{CO}_2\text{ prevented} = \text{weight\_kg} \times 2.50$, updating the NGO's `impact_stats` table automatically."* |
 | **Q6: What is `SIGNAL SQLSTATE '45000'`?** | *"`SQLSTATE '45000'` is the ANSI SQL standard code for an unhandled user-defined exception. In our stored procedure, when a business constraint is violated (e.g., vehicle capacity < food weight), `SIGNAL SQLSTATE '45000'` throws an explicit error that triggers our `EXIT HANDLER`, rolling back the transaction."* |
+
+---
+
+## 👨‍💻 Author & Credits
+- **Lead Developer & System Architect:** **[pathfind3er](https://github.com/pathfind3er)**
+- **GitHub Repository:** [`pathfind3er/food-rescue-network`](https://github.com/pathfind3er/food-rescue-network)
+- **Course / Domain:** Database Management Systems (DBMS) Laboratory Mini-Project
+- **Evaluation Highlights:** Normalized 3NF Architecture, Row-Level Locking (`FOR UPDATE`), Check Constraints, Stored Procedures, Views, Triggers, and Information Schema Introspection.
 
 ---
 
