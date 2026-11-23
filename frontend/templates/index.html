@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FoodRescue Network — Surplus Food Redistribution System (DBMS Project)</title>
+    
+    <!-- Bootstrap 5 CSS & Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --success-color: #198754;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --dark-terminal: #0f172a;
+            --dark-card: #1e293b;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .kpi-card {
+            border: none;
+            border-radius: 14px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            overflow: hidden;
+        }
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.06);
+        }
+
+        .batch-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            transition: all 0.2s ease;
+            background: #ffffff;
+        }
+        .batch-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+        }
+
+        .terminal-box {
+            background-color: var(--dark-terminal);
+            color: #e2e8f0;
+            border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            max-height: 480px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+
+        .badge-veg { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .badge-nonveg { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .badge-vegan { background-color: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }
+
+        .otp-badge {
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 2px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            border: 1px dashed #94a3b8;
+        }
+
+        .dbms-ribbon {
+            background: linear-gradient(90deg, #1e3a8a, #0284c7);
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOP NAVIGATION -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+                <span class="fs-4">🍲</span>
+                <span>FoodRescue Network</span>
+                <span class="dbms-ribbon ms-2 d-none d-md-inline">DBMS 3NF Project • No ORM</span>
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navMenu">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-3">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#surplusSection"><i class="bi bi-basket me-1"></i> Surplus Feed (View)</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#activeClaimsSection"><i class="bi bi-truck me-1"></i> Active Dispatches (4-Table Join)</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#auditLogsSection"><i class="bi bi-journal-code me-1"></i> Trigger & Audit Ledger</a>
+                    </li>
+                </ul>
+
+                <div class="d-flex align-items-center gap-2">
+                    <!-- DB Health Badge -->
+                    <span id="dbStatusBadge" class="badge bg-secondary p-2 d-flex align-items-center gap-1">
+                        <span class="spinner-grow spinner-grow-sm" role="status"></span>
+                        <span>Connecting MySQL...</span>
+                    </span>
+
+                    <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#schemaModal">
+                        <i class="bi bi-diagram-3 me-1"></i> View Active Constraints
+                    </button>
+
+                    <button class="btn btn-warning btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#vivaModal">
+                        <i class="bi bi-patch-question me-1"></i> Viva Demo Guide
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTAINER -->
+    <div class="container-fluid px-4 py-4">
+
+        <!-- ALERT CONTAINER -->
+        <div id="alertContainer"></div>
+
+        <!-- 1. TOP IMPACT KPI DASHBOARD (AGGREGATIONS: SUM, COUNT) -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card kpi-card shadow-sm border-start border-4 border-success p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.75rem;">Total Meals Saved</span>
+                            <h2 class="mb-0 fw-bold text-success mt-1" id="kpiMealsSaved">0</h2>
+                            <small class="text-muted"><i class="bi bi-calculator"></i> <code class="mono">SUM(total_meals_saved)</code></small>
+                        </div>
+                        <div class="bg-success-subtle p-3 rounded-circle text-success fs-3">
+                            <i class="bi bi-heart-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card kpi-card shadow-sm border-start border-4 border-primary p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.75rem;">Weight Rescued (kg)</span>
+                            <h2 class="mb-0 fw-bold text-primary mt-1" id="kpiWeightSaved">0.00</h2>
+                            <small class="text-muted"><i class="bi bi-calculator"></i> <code class="mono">SUM(weight_kg)</code></small>
+                        </div>
+                        <div class="bg-primary-subtle p-3 rounded-circle text-primary fs-3">
+                            <i class="bi bi-box-seam-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card kpi-card shadow-sm border-start border-4 border-info p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.75rem;">CO₂ Offset Prevented</span>
+                            <h2 class="mb-0 fw-bold text-info mt-1" id="kpiCo2Saved">0.00 kg</h2>
+                            <small class="text-muted"><i class="bi bi-lightning-charge"></i> <code class="mono">Trigger 2: weight * 2.5</code></small>
+                        </div>
+                        <div class="bg-info-subtle p-3 rounded-circle text-info fs-3">
+                            <i class="bi bi-tree-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card kpi-card shadow-sm border-start border-4 border-warning p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted text-uppercase fw-semibold" style="font-size: 0.75rem;">Live Surplus Inventory</span>
+                            <h2 class="mb-0 fw-bold text-dark mt-1" id="kpiAvailableBatches">0</h2>
+                            <small class="text-muted"><i class="bi bi-eye"></i> <code class="mono">vw_live_rescue_feed</code></small>
+                        </div>
+                        <div class="bg-warning-subtle p-3 rounded-circle text-warning fs-3">
+                            <i class="bi bi-broadcast-pin"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ZONE-WISE SUPPLY SUMMARY (GROUP BY zone) -->
+        <div class="card shadow-sm border-0 mb-4 p-3 bg-white">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-dark px-2 py-1"><i class="bi bi-geo-alt-fill"></i> SQL GROUP BY Query</span>
+                    <span class="fw-semibold text-secondary">Zone-wise Available Surplus Supply:</span>
+                </div>
+                <div id="zonePillsContainer" class="d-flex flex-wrap gap-2">
+                    <!-- Loaded dynamically via JS -->
+                    <span class="text-muted small">Loading zone aggregations...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. SECTION: LIVE SURPLUS FOOD FEED -->
+        <section id="surplusSection" class="mb-5">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <div>
+                    <h4 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                        <span>📦 Live Surplus Food Feed</span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-6" id="feedCountBadge">0 Batches</span>
+                    </h4>
+                    <small class="text-muted">Queries SQL View <code class="mono text-primary">vw_live_rescue_feed</code> with real-time countdown timer</small>
+                </div>
+
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <!-- Filter: Zone -->
+                    <select id="filterZone" class="form-select form-select-sm" style="width: 140px;" onchange="loadBatches()">
+                        <option value="">All Zones</option>
+                        <option value="South Zone">South Zone</option>
+                        <option value="North Zone">North Zone</option>
+                        <option value="Downtown">Downtown</option>
+                    </select>
+
+                    <!-- Filter: Food Type -->
+                    <select id="filterFoodType" class="form-select form-select-sm" style="width: 130px;" onchange="loadBatches()">
+                        <option value="">All Diet Types</option>
+                        <option value="VEG">VEG Only</option>
+                        <option value="NON_VEG">NON-VEG</option>
+                        <option value="VEGAN">VEGAN</option>
+                    </select>
+
+                    <!-- Filter: Category -->
+                    <select id="filterCategory" class="form-select form-select-sm" style="width: 140px;" onchange="loadBatches()">
+                        <option value="">All Categories</option>
+                        <option value="COOKED_MEAL">Cooked Meals</option>
+                        <option value="BAKERY">Bakery</option>
+                        <option value="PRODUCE">Produce</option>
+                        <option value="DAIRY">Dairy</option>
+                        <option value="PACKAGED">Packaged</option>
+                    </select>
+
+                    <button class="btn btn-outline-secondary btn-sm" onclick="loadBatches()" title="Refresh Feed and Run Expire Stale Procedure">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+
+                    <button class="btn btn-primary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#createBatchModal">
+                        <i class="bi bi-plus-circle me-1"></i> Post Surplus Batch
+                    </button>
+                </div>
+            </div>
+
+            <!-- BATCH CARDS GRID -->
+            <div id="batchesGrid" class="row g-3">
+                <!-- Rendered dynamically via JS -->
+                <div class="col-12 text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="text-muted mt-2">Loading surplus batches from database...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. SECTION: ACTIVE DISPATCHES & DELIVERIES (4-TABLE JOIN) -->
+        <section id="activeClaimsSection" class="mb-5">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                            <span>🚚 Active Rescue Dispatches</span>
+                            <span class="badge bg-warning text-dark fs-6" id="activeClaimsBadge">0 In Transit</span>
+                        </h5>
+                        <small class="text-muted">Demonstrates 4-Table SQL <code class="mono">INNER JOIN</code> across <code class="mono">claims ⨝ food_batches ⨝ users ⨝ volunteer_profiles</code></small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadDashboard()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh Claims
+                    </button>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="claimsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Claim #</th>
+                                    <th>Batch Title</th>
+                                    <th>Donor & Pickup</th>
+                                    <th>Claimed By (NGO)</th>
+                                    <th>Assigned Volunteer & Vehicle</th>
+                                    <th>Verification OTPs</th>
+                                    <th>Status</th>
+                                    <th class="text-end">DBMS Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="claimsTableBody">
+                                <tr>
+                                    <td colspan="8" class="text-center py-4 text-muted">No active dispatches currently in transit.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. SECTION: LIVE DBMS EVALUATION CONSOLE & TRIGGER AUDIT TRAIL -->
+        <section id="auditLogsSection" class="mb-4">
+            <div class="row g-4">
+                <!-- LEFT COLUMN: REAL-TIME AUDIT LOG TERMINAL -->
+                <div class="col-12 col-xl-7">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fs-5">💻</span>
+                                <div>
+                                    <h6 class="mb-0 fw-bold">Live SQL Execution & Trigger Ledger</h6>
+                                    <small class="text-secondary" style="font-size: 0.75rem;">Reads real-time records generated by <code class="mono text-info">trg_after_batch_insert</code> & <code class="mono text-info">trg_after_claim_completed</code></small>
+                                </div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-light" onclick="loadDashboard()">
+                                <i class="bi bi-arrow-repeat"></i> Poll
+                            </button>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="terminal-box p-3" id="auditTerminal">
+                                <!-- Log lines rendered dynamically -->
+                                <span class="text-secondary">// Listening for database trigger & procedure events...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: QUICK EVALUATION SUMMARY -->
+                <div class="col-12 col-xl-5">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white py-3 border-bottom">
+                            <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-shield-check text-primary me-2"></i>DBMS Relational Architecture Summary</h6>
+                            <small class="text-muted">3NF Normalization & Integrity Enforcement</small>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush small">
+                                <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-table text-primary me-2"></i>Normalized Entity Tables</span>
+                                    <span class="badge bg-secondary">6 Tables (3NF)</span>
+                                </li>
+                                <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-key text-warning me-2"></i>Integrity Constraints</span>
+                                    <span class="badge bg-secondary">PK, FK, UNIQUE, CHECK</span>
+                                </li>
+                                <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-lightning text-danger me-2"></i>Automated Triggers</span>
+                                    <span class="badge bg-info text-dark">2 Triggers Active</span>
+                                </li>
+                                <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-gear-wide-connected text-success me-2"></i>Stored Procedures (ACID)</span>
+                                    <span class="badge bg-success">2 Procedures (FOR UPDATE)</span>
+                                </li>
+                                <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-eye text-info me-2"></i>Relational Views</span>
+                                    <span class="badge bg-primary">vw_live_rescue_feed</span>
+                                </li>
+                                <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-shield-lock text-danger me-2"></i>Vehicle Capacity Validation</span>
+                                    <span class="badge bg-danger">SQLSTATE '45000' SIGNAL</span>
+                                </li>
+                            </ul>
+
+                            <div class="alert alert-primary mt-3 mb-0 py-2 px-3 small d-flex align-items-center justify-content-between">
+                                <span><i class="bi bi-info-circle me-1"></i> Ready for laboratory demonstration</span>
+                                <button class="btn btn-primary btn-sm py-0 px-2" data-bs-toggle="modal" data-bs-target="#vivaModal">Guide</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 1: POST NEW SURPLUS FOOD BATCH -->
+    <!-- ===================================================================== -->
+    <div class="modal fade" id="createBatchModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form id="createBatchForm" onsubmit="handleCreateBatch(event)">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Post Surplus Food Batch</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="alert alert-info py-2 small mb-3">
+                            <i class="bi bi-info-circle-fill me-1"></i> 
+                            Submitting will execute an <code class="mono">INSERT INTO food_batches</code> which automatically fires <code class="mono">trg_after_batch_insert</code>.
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Donor Organization *</label>
+                                <select class="form-select" id="newBatchDonor" required>
+                                    <!-- Populated via JS -->
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Food Category *</label>
+                                <select class="form-select" id="newBatchCategory" required>
+                                    <option value="COOKED_MEAL">Cooked Meal (Banquet / Catering)</option>
+                                    <option value="BAKERY">Bakery & Breads</option>
+                                    <option value="PRODUCE">Fresh Produce / Fruits</option>
+                                    <option value="DAIRY">Dairy & Milk Products</option>
+                                    <option value="PACKAGED">Packaged / Canned</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Batch Title *</label>
+                                <input type="text" class="form-control" id="newBatchTitle" placeholder="e.g., Vegetable Biryani & Raita Trays" required>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Detailed Description</label>
+                                <textarea class="form-control" id="newBatchDescription" rows="2" placeholder="Packaging type, temperature status, handling guidelines..."></textarea>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Dietary Type *</label>
+                                <select class="form-select" id="newBatchFoodType" required>
+                                    <option value="VEG">VEG (Vegetarian)</option>
+                                    <option value="NON_VEG">NON-VEG</option>
+                                    <option value="VEGAN">VEGAN</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Quantity (Meals) *</label>
+                                <input type="number" class="form-control" id="newBatchMeals" min="1" placeholder="e.g., 40" required>
+                                <small class="text-muted"><code class="mono">CHECK (quantity_meals > 0)</code></small>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Total Weight (kg) *</label>
+                                <input type="number" step="0.1" class="form-control" id="newBatchWeight" min="0.1" placeholder="e.g., 14.5" required>
+                                <small class="text-muted"><code class="mono">CHECK (weight_kg > 0)</code></small>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Storage Temperature *</label>
+                                <select class="form-select" id="newBatchTemp" required>
+                                    <option value="HOT">HOT (>60°C)</option>
+                                    <option value="AMBIENT">AMBIENT (Room Temp)</option>
+                                    <option value="REFRIGERATED">REFRIGERATED (0-4°C)</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Allergen Information</label>
+                                <input type="text" class="form-control" id="newBatchAllergens" value="None" placeholder="e.g., Dairy, Nuts, Gluten">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Prepared At *</label>
+                                <input type="datetime-local" class="form-control" id="newBatchPreparedAt" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Best Before (Expiry) *</label>
+                                <input type="datetime-local" class="form-control" id="newBatchBestBefore" required>
+                                <small class="text-muted"><code class="mono">CHECK (best_before > prepared_at)</code></small>
+                            </div>
+
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Pickup Street Address *</label>
+                                <input type="text" class="form-control" id="newBatchAddress" placeholder="Loading Dock / Service Gate / Kitchen address" required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Zone *</label>
+                                <select class="form-select" id="newBatchZone" required>
+                                    <option value="South Zone">South Zone</option>
+                                    <option value="North Zone">North Zone</option>
+                                    <option value="Downtown">Downtown</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary fw-semibold" id="btnSubmitBatch">
+                            <i class="bi bi-check2-circle me-1"></i> Post Batch & Fire Trigger
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 2: CLAIM BATCH (STORED PROCEDURE & CAPACITY CONSTRAINT TEST) -->
+    <!-- ===================================================================== -->
+    <div class="modal fade" id="claimBatchModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="claimBatchForm" onsubmit="handleClaimBatch(event)">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-cart-check me-2"></i>Claim Food Batch via Stored Procedure</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="claimBatchId">
+                        
+                        <div class="card bg-light p-3 border-0 mb-3">
+                            <span class="text-muted small text-uppercase fw-semibold">Selected Batch</span>
+                            <h6 class="fw-bold mb-1" id="claimModalBatchTitle">-</h6>
+                            <div class="d-flex gap-3 small text-muted">
+                                <span>Weight: <strong class="text-dark" id="claimModalWeight">-</strong> kg</span>
+                                <span>Meals: <strong class="text-dark" id="claimModalMeals">-</strong></span>
+                                <span>Zone: <strong class="text-dark" id="claimModalZone">-</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning py-2 small mb-3">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                            <strong>DBMS Physical Capacity Test:</strong> If the selected volunteer's vehicle capacity is less than the food weight (<span id="claimModalWeightRef">-</span> kg), MySQL will abort with <code class="mono">SQLSTATE 45000</code>!
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Claiming NGO Organization *</label>
+                            <select class="form-select" id="claimNgoSelect" required>
+                                <!-- Populated via JS -->
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Assign Volunteer Courier *</label>
+                            <select class="form-select" id="claimVolunteerSelect" required>
+                                <!-- Populated via JS -->
+                            </select>
+                            <small class="text-muted d-block mt-1">
+                                Notice capacity differences: Rahul has a <strong>BIKE (15kg max)</strong> while Priya has a <strong>VAN (250kg max)</strong>.
+                            </small>
+                        </div>
+
+                        <div id="claimErrorBox" class="alert alert-danger d-none py-2 small mt-2"></div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success fw-semibold" id="btnExecuteClaim">
+                            <i class="bi bi-play-circle me-1"></i> Execute sp_claim_food_batch
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 3: VIEW ACTIVE DATABASE CONSTRAINTS & METADATA -->
+    <!-- ===================================================================== -->
+    <div class="modal fade" id="schemaModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-database-check me-2"></i>Live MySQL INFORMATION_SCHEMA Introspection</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small">
+                        This view queries <code class="mono">INFORMATION_SCHEMA.TABLE_CONSTRAINTS</code>, <code class="mono">TRIGGERS</code>, <code class="mono">ROUTINES</code>, and <code class="mono">VIEWS</code> live from MySQL to prove that all schema constraints are strictly enforced inside the DBMS engine.
+                    </p>
+
+                    <ul class="nav nav-pills mb-3" id="schemaTab" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active btn-sm" data-bs-toggle="pill" data-bs-target="#tabConstraints">
+                                <i class="bi bi-key me-1"></i> Constraints (PK/FK/CHECK/UNIQUE)
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link btn-sm" data-bs-toggle="pill" data-bs-target="#tabTriggers">
+                                <i class="bi bi-lightning me-1"></i> Active Triggers
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link btn-sm" data-bs-toggle="pill" data-bs-target="#tabProcedures">
+                                <i class="bi bi-gear me-1"></i> Stored Procedures
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link btn-sm" data-bs-toggle="pill" data-bs-target="#tabViews">
+                                <i class="bi bi-eye me-1"></i> Database Views
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="schemaTabContent">
+                        <!-- CONSTRAINTS -->
+                        <div class="tab-pane fade show active" id="tabConstraints">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-sm table-bordered table-striped small align-middle">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Table Name</th>
+                                            <th>Constraint Name</th>
+                                            <th>Constraint Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="schemaConstraintsBody">
+                                        <tr><td colspan="3" class="text-center">Loading constraints...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- TRIGGERS -->
+                        <div class="tab-pane fade" id="tabTriggers">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered table-striped small align-middle">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Trigger Name</th>
+                                            <th>Event</th>
+                                            <th>Target Table</th>
+                                            <th>Action Timing</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="schemaTriggersBody">
+                                        <tr><td colspan="4" class="text-center">Loading triggers...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- PROCEDURES -->
+                        <div class="tab-pane fade" id="tabProcedures">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered table-striped small align-middle">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Procedure Name</th>
+                                            <th>Type</th>
+                                            <th>Security Type</th>
+                                            <th>Created At</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="schemaProceduresBody">
+                                        <tr><td colspan="4" class="text-center">Loading procedures...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VIEWS -->
+                        <div class="tab-pane fade" id="tabViews">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered table-striped small align-middle">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>View Name</th>
+                                            <th>Check Option</th>
+                                            <th>Updatable</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="schemaViewsBody">
+                                        <tr><td colspan="3" class="text-center">Loading views...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 4: VIVA DEMONSTRATION CHEAT SHEET -->
+    <!-- ===================================================================== -->
+    <div class="modal fade" id="vivaModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-mortarboard-fill me-2"></i>DBMS Lab Viva Demonstration Checklist</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small">
+                        Perform these 5 exact test cases to prove full mastery of Relational DBMS concepts to your examiner:
+                    </p>
+
+                    <div class="accordion" id="vivaAccordion">
+                        <!-- TEST 1 -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#viva1">
+                                    1. Automated Trigger 1 (trg_after_batch_insert)
+                                </button>
+                            </h2>
+                            <div id="viva1" class="accordion-collapse collapse show" data-bs-parent="#vivaAccordion">
+                                <div class="accordion-body small">
+                                    <strong>How to Demo:</strong> Click <em>"+ Post Surplus Batch"</em>, fill in valid values, and submit.<br>
+                                    <strong>What happens in MySQL:</strong> <code class="mono">AFTER INSERT ON food_batches</code> fires automatically and appends a <code class="mono">BATCH_CREATED</code> row to <code class="mono">audit_logs</code> visible instantly in the terminal ledger below.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TEST 2 -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-semibold text-danger" type="button" data-bs-toggle="collapse" data-bs-target="#viva2">
+                                    2. Stored Procedure & Physical Capacity Violation (SQLSTATE 45000)
+                                </button>
+                            </h2>
+                            <div id="viva2" class="accordion-collapse collapse" data-bs-parent="#vivaAccordion">
+                                <div class="accordion-body small">
+                                    <strong>How to Demo:</strong> Find Batch #2 (which weighs <strong>48.0 kg</strong>). Click <em>"Claim"</em> and select <strong>"Rahul Verma (BIKE - Max 15kg)"</strong>.<br>
+                                    <strong>What happens in MySQL:</strong> <code class="mono">sp_claim_food_batch</code> uses <code class="mono">SELECT ... FOR UPDATE</code>, detects <code class="mono">15.00 < 48.00</code>, and executes <code class="mono">SIGNAL SQLSTATE '45000'</code>. The UI shows the transaction rollback error!<br>
+                                    <strong>Next step:</strong> Change volunteer to <strong>"Priya Sharma (VAN - Max 250kg)"</strong> and submit. It claims successfully with generated OTPs.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TEST 3 -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-semibold text-success" type="button" data-bs-toggle="collapse" data-bs-target="#viva3">
+                                    3. Automated Trigger 2 (trg_after_claim_completed) & Metrics Propagation
+                                </button>
+                            </h2>
+                            <div id="viva3" class="accordion-collapse collapse" data-bs-parent="#vivaAccordion">
+                                <div class="accordion-body small">
+                                    <strong>How to Demo:</strong> In the <em>Active Dispatches</em> panel, click <strong>"Confirm Delivery"</strong>.<br>
+                                    <strong>What happens in MySQL:</strong> <code class="mono">claims.status</code> transitions to <code class="mono">'COMPLETED'</code>, which automatically fires <code class="mono">trg_after_claim_completed</code>. In one atomic operation, MySQL marks the batch <code class="mono">'DELIVERED'</code>, frees the volunteer back to <code class="mono">'ONLINE'</code>, calculates CO2 prevented (<code class="mono">weight * 2.5</code>), and increments NGO impact stats!
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TEST 4 -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#viva4">
+                                    4. Dynamic Relational View (vw_live_rescue_feed)
+                                </button>
+                            </h2>
+                            <div id="viva4" class="accordion-collapse collapse" data-bs-parent="#vivaAccordion">
+                                <div class="accordion-body small">
+                                    <strong>How to Demo:</strong> Point to the surplus cards feed.<br>
+                                    <strong>Explanation:</strong> The backend never queries the base table directly for feeds; it queries <code class="mono">vw_live_rescue_feed</code>, which uses an <code class="mono">INNER JOIN</code> with <code class="mono">users</code> and calculates <code class="mono">TIMESTAMPDIFF(MINUTE, NOW(), best_before)</code> dynamically.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TEST 5 -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#viva5">
+                                    5. Concurrency & Row-Level Locking (SELECT ... FOR UPDATE)
+                                </button>
+                            </h2>
+                            <div id="viva5" class="accordion-collapse collapse" data-bs-parent="#vivaAccordion">
+                                <div class="accordion-body small">
+                                    <strong>Explanation:</strong> <code class="mono">sp_claim_food_batch</code> uses row-level exclusive locks (<code class="mono">FOR UPDATE</code>) on both the batch record and volunteer profile to ensure that in high-concurrency environments, two NGOs cannot race to claim the same food batch.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JavaScript Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- CORE VANILLA JAVASCRIPT LOGIC -->
+    <script>
+        // Global state storage
+        let lookupData = { donors: [], ngos: [], volunteers: [] };
+
+        // Document Ready Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            initDefaultTimestamps();
+            checkHealth();
+            loadLookups();
+            loadBatches();
+            loadDashboard();
+            loadSchemaInfo();
+
+            // Auto-poll dashboard and audit terminal every 8 seconds
+            setInterval(() => {
+                loadDashboard();
+            }, 8000);
+        });
+
+        // Initialize Prepared At and Best Before inputs with realistic defaults
+        function initDefaultTimestamps() {
+            const now = new Date();
+            const prepTime = new Date(now.getTime() - (60 * 60 * 1000)); // 1 hour ago
+            const expiryTime = new Date(now.getTime() + (6 * 60 * 60 * 1000)); // 6 hours from now
+
+            const formatLocal = (d) => {
+                const pad = (n) => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            };
+
+            const prepInput = document.getElementById('newBatchPreparedAt');
+            const expInput = document.getElementById('newBatchBestBefore');
+            if (prepInput) prepInput.value = formatLocal(prepTime);
+            if (expInput) expInput.value = formatLocal(expiryTime);
+        }
+
+        // Show Dismissible Toast/Alert
+        function showAlert(type, message) {
+            const container = document.getElementById('alertContainer');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show shadow-sm`;
+            alertDiv.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle-fill' : (type === 'danger' ? 'exclamation-octagon-fill' : 'info-circle-fill')} me-2 fs-5"></i>
+                    <div>${message}</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            container.appendChild(alertDiv);
+            setTimeout(() => {
+                alertDiv.classList.remove('show');
+                setTimeout(() => alertDiv.remove(), 200);
+            }, 6000);
+        }
+
+        // 1. Check System & DB Health
+        async function checkHealth() {
+            const badge = document.getElementById('dbStatusBadge');
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+                if (data.status === 'connected') {
+                    badge.className = 'badge bg-success p-2 d-flex align-items-center gap-1';
+                    badge.innerHTML = `<i class="bi bi-check-circle-fill"></i> MySQL 8.0 Connected (${data.database})`;
+                } else {
+                    badge.className = 'badge bg-danger p-2 d-flex align-items-center gap-1';
+                    badge.innerHTML = `<i class="bi bi-x-circle-fill"></i> DB Disconnected`;
+                    showAlert('danger', `<strong>Database Connection Failed:</strong> ${data.error}.<br><small>${data.hint}</small>`);
+                }
+            } catch (err) {
+                badge.className = 'badge bg-danger p-2 d-flex align-items-center gap-1';
+                badge.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> Server Offline`;
+            }
+        }
+
+        // 2. Load Lookups (Donors, NGOs, Volunteers)
+        async function loadLookups() {
+            try {
+                const res = await fetch('/api/lookups');
+                const data = await res.json();
+                if (data.success) {
+                    lookupData = data;
+
+                    // Populate Donor Dropdown in Create Modal
+                    const donorSelect = document.getElementById('newBatchDonor');
+                    donorSelect.innerHTML = data.donors.map(d => 
+                        `<option value="${d.user_id}">${d.full_name} (${d.zone})</option>`
+                    ).join('');
+
+                    // Populate NGO Dropdown in Claim Modal
+                    const ngoSelect = document.getElementById('claimNgoSelect');
+                    ngoSelect.innerHTML = data.ngos.map(n => 
+                        `<option value="${n.user_id}">${n.full_name} (Daily Cap: ${n.daily_meal_capacity} meals)</option>`
+                    ).join('');
+
+                    // Populate Volunteer Dropdown in Claim Modal
+                    const volSelect = document.getElementById('claimVolunteerSelect');
+                    volSelect.innerHTML = data.volunteers.map(v => 
+                        `<option value="${v.user_id}">${v.full_name} [Vehicle: ${v.vehicle_type} (${v.vehicle_reg_no}) | Max: ${v.max_capacity_kg} kg | Status: ${v.availability_status}]</option>`
+                    ).join('');
+                }
+            } catch (err) {
+                console.error("Failed to load lookups:", err);
+            }
+        }
+
+        // 3. Load Surplus Batches (vw_live_rescue_feed)
+        async function loadBatches() {
+            const grid = document.getElementById('batchesGrid');
+            const zone = document.getElementById('filterZone').value;
+            const foodType = document.getElementById('filterFoodType').value;
+            const category = document.getElementById('filterCategory').value;
+
+            try {
+                const params = new URLSearchParams();
+                if (zone) params.append('zone', zone);
+                if (foodType) params.append('food_type', foodType);
+                if (category) params.append('category', category);
+
+                const res = await fetch(`/api/batches?${params.toString()}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('feedCountBadge').textContent = `${data.count} Available Batches`;
+
+                    if (data.batches.length === 0) {
+                        grid.innerHTML = `
+                            <div class="col-12 text-center py-5">
+                                <i class="bi bi-inbox text-muted display-4"></i>
+                                <h5 class="text-secondary mt-3">No Available Surplus Food In This Filter</h5>
+                                <p class="text-muted small">Post a new batch or adjust your zone/diet filters.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    grid.innerHTML = data.batches.map(b => {
+                        const minsLeft = b.minutes_left;
+                        let expiryBadge = '';
+                        if (minsLeft <= 0) {
+                            expiryBadge = `<span class="badge bg-danger"><i class="bi bi-clock-history"></i> EXPIRED</span>`;
+                        } else if (minsLeft < 120) {
+                            expiryBadge = `<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-alarm-fill"></i> Expiring in ${minsLeft}m</span>`;
+                        } else {
+                            const hours = Math.floor(minsLeft / 60);
+                            expiryBadge = `<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-clock"></i> ${hours}h ${minsLeft % 60}m left</span>`;
+                        }
+
+                        let dietBadge = 'badge-veg';
+                        if (b.food_type === 'NON_VEG') dietBadge = 'badge-nonveg';
+                        if (b.food_type === 'VEGAN') dietBadge = 'badge-vegan';
+
+                        return `
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <div class="card batch-card h-100 p-3 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="badge ${dietBadge} text-uppercase px-2 py-1">${b.food_type}</span>
+                                            ${expiryBadge}
+                                        </div>
+
+                                        <h5 class="fw-bold mb-1 text-dark">${escapeHtml(b.title)}</h5>
+                                        <p class="text-muted small mb-2 text-truncate" title="${escapeHtml(b.description || '')}">
+                                            ${escapeHtml(b.description || 'No special handling instructions.')}
+                                        </p>
+
+                                        <div class="p-2 bg-light rounded-3 mb-3 small">
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span class="text-secondary"><i class="bi bi-pie-chart"></i> Quantity:</span>
+                                                <strong class="text-dark">${b.quantity_meals} meals</strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span class="text-secondary"><i class="bi bi-speedometer2"></i> Weight:</span>
+                                                <strong class="text-primary fw-bold">${b.weight_kg} kg</strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span class="text-secondary"><i class="bi bi-thermometer-half"></i> Storage:</span>
+                                                <span class="badge bg-secondary-subtle text-dark">${b.storage_temp_req}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <span class="text-secondary"><i class="bi bi-exclamation-circle"></i> Allergens:</span>
+                                                <span class="text-dark">${escapeHtml(b.allergen_info || 'None')}</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="small text-muted mb-3 border-top pt-2">
+                                            <div class="d-flex align-items-center gap-1 text-truncate">
+                                                <i class="bi bi-building"></i> <strong>${escapeHtml(b.donor_name)}</strong>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-1 text-truncate">
+                                                <i class="bi bi-geo-alt"></i> ${escapeHtml(b.pickup_address)} (${escapeHtml(b.zone)})
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex gap-2 pt-2 border-top">
+                                        <button class="btn btn-success btn-sm flex-grow-1 fw-semibold" onclick="openClaimModal(${b.batch_id}, '${escapeJs(b.title)}', ${b.weight_kg}, ${b.quantity_meals}, '${escapeJs(b.zone)}')">
+                                            <i class="bi bi-cart-plus me-1"></i> Claim Batch
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" onclick="handleDeleteBatch(${b.batch_id})" title="Delete Batch (Cascade Demo)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (err) {
+                grid.innerHTML = `<div class="col-12 alert alert-danger">Error querying vw_live_rescue_feed: ${err}</div>`;
+            }
+        }
+
+        // 4. Load Dashboard KPIs, Active Claims, and Audit Logs
+        async function loadDashboard() {
+            try {
+                const res = await fetch('/api/dashboard');
+                const data = await res.json();
+                if (data.success) {
+                    // Update KPI Cards
+                    document.getElementById('kpiMealsSaved').textContent = Number(data.kpis.total_meals).toLocaleString();
+                    document.getElementById('kpiWeightSaved').textContent = Number(data.kpis.total_weight_kg).toFixed(1);
+                    document.getElementById('kpiCo2Saved').textContent = `${Number(data.kpis.total_co2_kg).toFixed(1)} kg`;
+                    document.getElementById('kpiAvailableBatches').textContent = data.kpis.available_count || 0;
+
+                    // Update Zone Distribution Pills
+                    const zoneContainer = document.getElementById('zonePillsContainer');
+                    if (data.zone_distribution && data.zone_distribution.length > 0) {
+                        zoneContainer.innerHTML = data.zone_distribution.map(z => `
+                            <span class="badge bg-light text-dark border px-2 py-1">
+                                <strong>${z.zone}:</strong> ${z.available_batches} batches (${z.zone_weight_kg} kg)
+                            </span>
+                        `).join('');
+                    } else {
+                        zoneContainer.innerHTML = '<span class="text-muted small">No available batches in any zone.</span>';
+                    }
+
+                    // Update Active Claims Table (4-Table Join)
+                    const claimsBody = document.getElementById('claimsTableBody');
+                    document.getElementById('activeClaimsBadge').textContent = `${data.active_claims.length} In Transit`;
+
+                    if (data.active_claims.length === 0) {
+                        claimsBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">No dispatches currently in transit. Claim a batch above to create one.</td></tr>`;
+                    } else {
+                        claimsBody.innerHTML = data.active_claims.map(c => `
+                            <tr>
+                                <td class="fw-bold">#${c.claim_id}</td>
+                                <td>
+                                    <strong>${escapeHtml(c.batch_title)}</strong>
+                                    <div class="small text-muted">${c.quantity_meals} meals • ${c.weight_kg} kg</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">${escapeHtml(c.donor_name)}</div>
+                                    <div class="small text-muted"><i class="bi bi-geo-alt"></i> ${escapeHtml(c.pickup_address)}</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold text-primary">${escapeHtml(c.ngo_name)}</div>
+                                    <div class="small text-muted"><i class="bi bi-pin-map"></i> ${c.zone}</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold text-dark">${escapeHtml(c.volunteer_name)}</div>
+                                    <div class="small text-muted">
+                                        <span class="badge bg-secondary-subtle text-dark">${c.vehicle_type} (${c.vehicle_reg_no})</span>
+                                        <span>Max: ${c.max_capacity_kg} kg</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        <small class="text-muted">Pickup: <span class="otp-badge">${c.pickup_otp}</span></small>
+                                        <small class="text-muted">Delivery: <span class="otp-badge">${c.delivery_otp}</span></small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-truck me-1"></i>${c.claim_status}</span>
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-success btn-sm fw-semibold" onclick="handleConfirmDelivery(${c.claim_id})">
+                                        <i class="bi bi-check2-all me-1"></i> Confirm Delivery
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+
+                    // Update Real-Time Audit Terminal
+                    const terminal = document.getElementById('auditTerminal');
+                    if (data.audit_trail && data.audit_trail.length > 0) {
+                        terminal.innerHTML = data.audit_trail.map(l => {
+                            let eventColor = '#38bdf8'; // light blue
+                            if (l.event_type === 'BATCH_CREATED') eventColor = '#4ade80'; // green
+                            if (l.event_type === 'BATCH_CLAIMED') eventColor = '#fbbf24'; // yellow
+                            if (l.event_type === 'DELIVERY_COMPLETED') eventColor = '#a855f7'; // purple
+                            if (l.event_type === 'AUTO_EXPIRED_JOB') eventColor = '#f87171'; // red
+
+                            return `
+                                <div class="mb-2 pb-1 border-bottom border-secondary border-opacity-25">
+                                    <span class="text-secondary">[${l.logged_at}]</span> 
+                                    <span style="color: ${eventColor}; font-weight: 600;">[${l.event_type}]</span>
+                                    <span class="text-light"> ${escapeHtml(l.description)}</span>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                }
+            } catch (err) {
+                console.error("Dashboard poll error:", err);
+            }
+        }
+
+        // 5. Open Claim Batch Modal
+        function openClaimModal(batchId, title, weight, meals, zone) {
+            document.getElementById('claimBatchId').value = batchId;
+            document.getElementById('claimModalBatchTitle').textContent = `Batch #${batchId}: ${title}`;
+            document.getElementById('claimModalWeight').textContent = weight;
+            document.getElementById('claimModalWeightRef').textContent = weight;
+            document.getElementById('claimModalMeals').textContent = meals;
+            document.getElementById('claimModalZone').textContent = zone;
+            document.getElementById('claimErrorBox').classList.add('d-none');
+
+            const modal = new bootstrap.Modal(document.getElementById('claimBatchModal'));
+            modal.show();
+        }
+
+        // 6. Handle Create Batch Form Submission
+        async function handleCreateBatch(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmitBatch');
+            btn.disabled = true;
+
+            const payload = {
+                donor_id: parseInt(document.getElementById('newBatchDonor').value),
+                title: document.getElementById('newBatchTitle').value,
+                description: document.getElementById('newBatchDescription').value,
+                category: document.getElementById('newBatchCategory').value,
+                food_type: document.getElementById('newBatchFoodType').value,
+                quantity_meals: parseInt(document.getElementById('newBatchMeals').value),
+                weight_kg: parseFloat(document.getElementById('newBatchWeight').value),
+                storage_temp_req: document.getElementById('newBatchTemp').value,
+                allergen_info: document.getElementById('newBatchAllergens').value,
+                prepared_at: document.getElementById('newBatchPreparedAt').value,
+                best_before: document.getElementById('newBatchBestBefore').value,
+                pickup_address: document.getElementById('newBatchAddress').value,
+                zone: document.getElementById('newBatchZone').value
+            };
+
+            try {
+                const res = await fetch('/api/batches', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('createBatchModal')).hide();
+                    document.getElementById('createBatchForm').reset();
+                    initDefaultTimestamps();
+                    showAlert('success', `<strong>Success!</strong> ${data.message}`);
+                    loadBatches();
+                    loadDashboard();
+                } else {
+                    showAlert('danger', `<strong>Insert Aborted:</strong> ${data.error}`);
+                }
+            } catch (err) {
+                showAlert('danger', `Network Error: ${err}`);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // 7. Handle Claim Batch Submission (Stored Procedure Call)
+        async function handleClaimBatch(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnExecuteClaim');
+            const errBox = document.getElementById('claimErrorBox');
+            btn.disabled = true;
+            errBox.classList.add('d-none');
+
+            const payload = {
+                batch_id: parseInt(document.getElementById('claimBatchId').value),
+                ngo_id: parseInt(document.getElementById('claimNgoSelect').value),
+                volunteer_id: parseInt(document.getElementById('claimVolunteerSelect').value)
+            };
+
+            try {
+                const res = await fetch('/api/claim', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('claimBatchModal')).hide();
+                    showAlert('success', `<strong>Claim Executed:</strong> ${data.message} (Pickup OTP: <code>${data.claim_details.pickup_otp}</code>)`);
+                    loadBatches();
+                    loadDashboard();
+                } else {
+                    errBox.classList.remove('d-none');
+                    errBox.innerHTML = `
+                        <strong><i class="bi bi-x-circle-fill me-1"></i> Transaction Rolled Back by MySQL:</strong><br>
+                        ${escapeHtml(data.error)}
+                    `;
+                }
+            } catch (err) {
+                errBox.classList.remove('d-none');
+                errBox.textContent = `Network Exception: ${err}`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // 8. Handle Confirm Delivery (Trigger 2 Activation)
+        async function handleConfirmDelivery(claimId) {
+            if (!confirm(`Are you sure you want to confirm delivery for Claim #${claimId}? This will fire Trigger 'trg_after_claim_completed' in MySQL.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/deliver/${claimId}`, { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    showAlert('success', `
+                        <strong>Delivery Completed!</strong> ${data.message}<br>
+                        <small class="mono text-dark">${data.trigger_audit_log ? data.trigger_audit_log.description : ''}</small>
+                    `);
+                    loadBatches();
+                    loadDashboard();
+                } else {
+                    showAlert('danger', `Delivery Confirmation Failed: ${data.error}`);
+                }
+            } catch (err) {
+                showAlert('danger', `Network Error: ${err}`);
+            }
+        }
+
+        // 9. Handle Delete Batch
+        async function handleDeleteBatch(batchId) {
+            if (!confirm(`Delete Surplus Food Batch #${batchId}? Demonstrates relational integrity and CASCADE constraints.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/batches/${batchId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('info', data.message);
+                    loadBatches();
+                    loadDashboard();
+                } else {
+                    showAlert('danger', data.error);
+                }
+            } catch (err) {
+                showAlert('danger', `Delete failed: ${err}`);
+            }
+        }
+
+        // 10. Load Schema Info from INFORMATION_SCHEMA
+        async function loadSchemaInfo() {
+            try {
+                const res = await fetch('/api/schema-info');
+                const data = await res.json();
+                if (data.success) {
+                    // Constraints
+                    const cBody = document.getElementById('schemaConstraintsBody');
+                    cBody.innerHTML = data.constraints.map(c => `
+                        <tr>
+                            <td><strong class="text-primary">${c.TABLE_NAME}</strong></td>
+                            <td><code class="mono">${c.CONSTRAINT_NAME}</code></td>
+                            <td><span class="badge ${c.CONSTRAINT_TYPE === 'PRIMARY KEY' ? 'bg-danger' : (c.CONSTRAINT_TYPE === 'FOREIGN KEY' ? 'bg-warning text-dark' : (c.CONSTRAINT_TYPE === 'UNIQUE' ? 'bg-info text-dark' : 'bg-secondary'))}">${c.CONSTRAINT_TYPE}</span></td>
+                        </tr>
+                    `).join('');
+
+                    // Triggers
+                    const tBody = document.getElementById('schemaTriggersBody');
+                    tBody.innerHTML = data.triggers.map(t => `
+                        <tr>
+                            <td><strong class="text-success">${t.TRIGGER_NAME}</strong></td>
+                            <td><span class="badge bg-dark">${t.EVENT_MANIPULATION}</span></td>
+                            <td>${t.EVENT_OBJECT_TABLE}</td>
+                            <td>${t.ACTION_TIMING}</td>
+                        </tr>
+                    `).join('');
+
+                    // Procedures
+                    const pBody = document.getElementById('schemaProceduresBody');
+                    pBody.innerHTML = data.routines.map(r => `
+                        <tr>
+                            <td><strong class="text-primary">${r.ROUTINE_NAME}</strong></td>
+                            <td><span class="badge bg-secondary">${r.ROUTINE_TYPE}</span></td>
+                            <td>${r.SECURITY_TYPE}</td>
+                            <td>${r.CREATED}</td>
+                        </tr>
+                    `).join('');
+
+                    // Views
+                    const vBody = document.getElementById('schemaViewsBody');
+                    vBody.innerHTML = data.views.map(v => `
+                        <tr>
+                            <td><strong class="text-info">${v.VIEW_NAME}</strong></td>
+                            <td>${v.CHECK_OPTION}</td>
+                            <td><span class="badge ${v.IS_UPDATABLE === 'YES' ? 'bg-success' : 'bg-secondary'}">${v.IS_UPDATABLE}</span></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error("Schema fetch error:", err);
+            }
+        }
+
+        // Helper string sanitizers
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>"']/g, m => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[m]);
+        }
+
+        function escapeJs(str) {
+            if (!str) return '';
+            return String(str).replace(/['"\\]/g, '\\$&');
+        }
+    </script>
+</body>
+</html>
