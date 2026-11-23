@@ -40,6 +40,8 @@ def get_db_connection():
         ssl_mode = os.getenv('DB_SSL', 'false').lower()
         if ssl_mode in ('true', '1', 'required') or 'tidbcloud.com' in conn_kwargs['host'] or 'aivencloud.com' in conn_kwargs['host']:
             conn_kwargs['ssl_disabled'] = False
+            conn_kwargs['ssl_verify_cert'] = False
+            conn_kwargs['ssl_verify_identity'] = False
 
         conn = mysql.connector.connect(**conn_kwargs)
         return conn
@@ -111,9 +113,18 @@ def get_batches():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # 1. Run maintenance procedure to expire stale items
-        cursor.callproc('sp_expire_stale_batches', [0])
-        conn.commit()
+        # 1. Run maintenance procedure to expire stale items (with fallback for cloud engines like TiDB)
+        try:
+            cursor.callproc('sp_expire_stale_batches', [0])
+            conn.commit()
+        except Error:
+            # Procedural fallback: execute direct SQL equivalent
+            cursor.execute("""
+                UPDATE food_batches 
+                SET status = 'EXPIRED' 
+                WHERE status = 'AVAILABLE' AND best_before <= NOW()
+            """)
+            conn.commit()
 
         # 2. Query View with dynamic parameterized WHERE clauses
         query = "SELECT * FROM vw_live_rescue_feed WHERE 1=1"
@@ -200,6 +211,16 @@ def create_batch():
             ORDER BY log_id DESC LIMIT 1
         """, (new_batch_id,))
         audit_entry = serialize_row(cursor.fetchone())
+
+        # If database engine does not execute triggers automatically, insert audit log
+        if not audit_entry:
+            cursor.execute("""
+                INSERT INTO audit_logs (batch_id, actor_user_id, event_type, old_status, new_status, description, logged_at)
+                VALUES (%s, %s, 'BATCH_CREATED', NULL, 'AVAILABLE', %s, NOW())
+            """, (new_batch_id, donor_id, f'Surplus batch "{title}" ({quantity_meals} meals, {weight_kg} kg) listed in {zone} [Category: {category}]'))
+            conn.commit()
+            cursor.execute("SELECT * FROM audit_logs WHERE batch_id = %s AND event_type = 'BATCH_CREATED' ORDER BY log_id DESC LIMIT 1", (new_batch_id,))
+            audit_entry = serialize_row(cursor.fetchone())
 
         cursor.close()
         conn.close()
@@ -308,13 +329,77 @@ def claim_batch():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Output parameters for stored procedure
-        # sp_claim_food_batch(IN p_batch_id, IN p_ngo_id, IN p_volunteer_id, OUT p_claim_id, OUT p_status_msg)
-        result_args = cursor.callproc('sp_claim_food_batch', [batch_id, ngo_id, volunteer_id, 0, ''])
-        conn.commit()
+        claim_id = None
+        status_msg = "Batch claimed successfully."
 
-        claim_id = result_args[3]
-        status_msg = result_args[4]
+        # Attempt to run MySQL Stored Procedure sp_claim_food_batch
+        try:
+            result_args = cursor.callproc('sp_claim_food_batch', [batch_id, ngo_id, volunteer_id, 0, ''])
+            conn.commit()
+            claim_id = result_args[3]
+            status_msg = result_args[4]
+        except (Error, Exception) as proc_err:
+            err_str = str(proc_err).lower()
+            if "does not exist" in err_str or "unsupported" in err_str or "not supported" in err_str or getattr(proc_err, 'errno', 0) in (8108, 1305, 1064):
+                # ACID Transactional Fallback: execute identical row-locked logic directly
+                # 1. Lock batch row FOR UPDATE
+                cursor.execute("""
+                    SELECT batch_id, donor_id, title, weight_kg, status, best_before, (best_before <= NOW()) AS is_expired 
+                    FROM food_batches 
+                    WHERE batch_id = %s FOR UPDATE
+                """, (batch_id,))
+                batch = cursor.fetchone()
+                if not batch:
+                    raise Exception(f"Batch #{batch_id} does not exist.")
+                if batch['status'] != 'AVAILABLE':
+                    raise Exception(f"Batch #{batch_id} is no longer available (Current Status: {batch['status']}).")
+                if batch['is_expired']:
+                    raise Exception(f"Batch #{batch_id} has expired past its best before date.")
+
+                # 2. Lock volunteer profile FOR UPDATE & enforce vehicle capacity
+                cursor.execute("""
+                    SELECT volunteer_id, vehicle_type, max_capacity_kg, availability_status 
+                    FROM volunteer_profiles 
+                    WHERE volunteer_id = %s FOR UPDATE
+                """, (volunteer_id,))
+                vol = cursor.fetchone()
+                if not vol:
+                    raise Exception(f"Volunteer #{volunteer_id} does not exist.")
+                if vol['availability_status'] != 'ONLINE':
+                    raise Exception(f"Volunteer #{volunteer_id} is currently {vol['availability_status']} and cannot accept new dispatches.")
+                if float(vol['max_capacity_kg']) < float(batch['weight_kg']):
+                    return jsonify({
+                        "success": False,
+                        "error": f"CAPACITY_EXCEEDED: Volunteer vehicle ({vol['vehicle_type']}, max {vol['max_capacity_kg']} kg) cannot carry batch weight ({batch['weight_kg']} kg). Choose a volunteer with a larger vehicle.",
+                        "sql_state": "45000",
+                        "error_code": 1644
+                    }), 400
+
+                # 3. Generate 4-digit OTPs
+                import random
+                p_otp = str(random.randint(1000, 9999))
+                d_otp = str(random.randint(1000, 9999))
+
+                # 4. Insert into claims
+                cursor.execute("""
+                    INSERT INTO claims (batch_id, ngo_id, volunteer_id, pickup_otp, delivery_otp, status)
+                    VALUES (%s, %s, %s, %s, %s, 'ASSIGNED')
+                """, (batch_id, ngo_id, volunteer_id, p_otp, d_otp))
+                claim_id = cursor.lastrowid
+
+                # 5. Update states atomically
+                cursor.execute("UPDATE food_batches SET status = 'CLAIMED' WHERE batch_id = %s", (batch_id,))
+                cursor.execute("UPDATE volunteer_profiles SET availability_status = 'BUSY' WHERE volunteer_id = %s", (volunteer_id,))
+
+                # 6. Insert audit log
+                cursor.execute("""
+                    INSERT INTO audit_logs (batch_id, actor_user_id, event_type, old_status, new_status, description, logged_at)
+                    VALUES (%s, %s, 'BATCH_CLAIMED', 'AVAILABLE', 'CLAIMED', %s, NOW())
+                """, (batch_id, volunteer_id, f"Batch #{batch_id} claimed by NGO #{ngo_id} with Volunteer #{volunteer_id}"))
+
+                conn.commit()
+            else:
+                raise proc_err
 
         # Fetch created claim with generated OTPs
         cursor.execute("SELECT * FROM claims WHERE claim_id = %s", (claim_id,))
@@ -386,6 +471,35 @@ def confirm_delivery(claim_id):
             ORDER BY log_id DESC LIMIT 1
         """, (claim['batch_id'],))
         trigger_log = serialize_row(cursor.fetchone())
+
+        # If database engine does not execute triggers (e.g. TiDB cloud), execute state sync in ACID transaction
+        if not trigger_log:
+            cursor.execute("SELECT quantity_meals, weight_kg, title FROM food_batches WHERE batch_id = %s", (claim['batch_id'],))
+            b_info = cursor.fetchone()
+            meals = b_info['quantity_meals'] if b_info else 0
+            weight = float(b_info['weight_kg']) if b_info else 0.0
+            title = b_info['title'] if b_info else 'Batch'
+            co2 = round(weight * 2.50, 2)
+
+            cursor.execute("UPDATE food_batches SET status = 'DELIVERED' WHERE batch_id = %s", (claim['batch_id'],))
+            cursor.execute("UPDATE volunteer_profiles SET availability_status = 'ONLINE', total_deliveries = total_deliveries + 1 WHERE volunteer_id = %s", (claim['volunteer_id'],))
+            cursor.execute("""
+                UPDATE impact_stats 
+                SET total_batches_rescued = total_batches_rescued + 1,
+                    total_meals_saved = total_meals_saved + %s,
+                    total_weight_saved_kg = total_weight_saved_kg + %s,
+                    co2_prevented_kg = co2_prevented_kg + %s,
+                    last_rescue_at = NOW()
+                WHERE ngo_id = %s
+            """, (meals, weight, co2, claim['ngo_id']))
+            cursor.execute("""
+                INSERT INTO audit_logs (batch_id, actor_user_id, event_type, old_status, new_status, description, logged_at)
+                VALUES (%s, %s, 'DELIVERY_COMPLETED', %s, 'COMPLETED', %s, NOW())
+            """, (claim['batch_id'], claim['volunteer_id'], claim['status'], f"Batch #{claim['batch_id']} (\"{title}\") completed. Saved {meals} meals, {weight} kg food. CO2 Offset: {co2} kg."))
+            conn.commit()
+
+            cursor.execute("SELECT * FROM audit_logs WHERE batch_id = %s AND event_type = 'DELIVERY_COMPLETED' ORDER BY log_id DESC LIMIT 1", (claim['batch_id'],))
+            trigger_log = serialize_row(cursor.fetchone())
 
         # Query updated NGO impact stats to show immediate propagation
         cursor.execute("SELECT * FROM impact_stats WHERE ngo_id = %s", (claim['ngo_id'],))
