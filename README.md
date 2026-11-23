@@ -39,6 +39,85 @@ Large commercial food producers (hotels, banquets, corporate dining, bakeries) g
 
 The database `food_rescue_db` consists of **6 normalized tables** designed to Third Normal Form (3NF):
 
+```mermaid
+erDiagram
+    USERS ||--o| VOLUNTEER_PROFILES : "extends (1:1)"
+    USERS ||--o| IMPACT_STATS : "tracks (1:1)"
+    USERS ||--o{ FOOD_BATCHES : "donates (1:N)"
+    USERS ||--o{ CLAIMS : "claimed_by (1:N)"
+    FOOD_BATCHES ||--|| CLAIMS : "assigned_to (1:1 UNIQUE)"
+    VOLUNTEER_PROFILES ||--o{ CLAIMS : "couriers (1:N)"
+    FOOD_BATCHES ||--o{ AUDIT_LOGS : "generates (1:N)"
+
+    USERS {
+        int user_id PK "AUTO_INCREMENT"
+        string full_name "NOT NULL"
+        string email UK "UNIQUE, NOT NULL"
+        string phone "NOT NULL"
+        enum role "DONOR, NGO, VOLUNTEER, ADMIN"
+        string zone "NOT NULL"
+        timestamp created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    VOLUNTEER_PROFILES {
+        int volunteer_id PK, FK "References users.user_id"
+        enum vehicle_type "BICYCLE, BIKE, CAR, VAN"
+        string vehicle_reg_no UK "UNIQUE, NOT NULL"
+        decimal max_capacity_kg "CHECK > 0"
+        enum availability_status "ONLINE, BUSY, OFFLINE"
+        int total_deliveries "DEFAULT 0"
+        decimal avg_rating "DEFAULT 5.00"
+    }
+
+    IMPACT_STATS {
+        int ngo_id PK, FK "References users.user_id"
+        string ngo_reg_number UK "UNIQUE, NOT NULL"
+        int daily_meal_capacity "CHECK > 0"
+        int total_batches_rescued "DEFAULT 0"
+        int total_meals_saved "DEFAULT 0"
+        decimal total_weight_saved_kg "DEFAULT 0.00"
+        decimal co2_prevented_kg "DEFAULT 0.00"
+    }
+
+    FOOD_BATCHES {
+        int batch_id PK "AUTO_INCREMENT"
+        int donor_id FK "References users.user_id"
+        string title "NOT NULL"
+        enum category "COOKED_MEAL, BAKERY, PRODUCE, DAIRY, PACKAGED"
+        enum food_type "VEG, NON_VEG, VEGAN"
+        int quantity_meals "CHECK > 0"
+        decimal weight_kg "CHECK > 0"
+        datetime prepared_at "NOT NULL"
+        datetime best_before "CHECK (best_before > prepared_at)"
+        string zone "NOT NULL"
+        enum status "AVAILABLE, CLAIMED, IN_TRANSIT, DELIVERED, EXPIRED"
+    }
+
+    CLAIMS {
+        int claim_id PK "AUTO_INCREMENT"
+        int batch_id FK, UK "UNIQUE (Anti-Double Booking)"
+        int ngo_id FK "References users.user_id"
+        int volunteer_id FK "References users.user_id"
+        string pickup_otp "CHAR(4)"
+        string delivery_otp "CHAR(4)"
+        int rating "CHECK (rating BETWEEN 1 AND 5)"
+        enum status "ASSIGNED, PICKED_UP, COMPLETED, CANCELLED"
+        timestamp claimed_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    AUDIT_LOGS {
+        int log_id PK "AUTO_INCREMENT"
+        int batch_id FK "ON DELETE SET NULL"
+        int actor_user_id FK "ON DELETE SET NULL"
+        string event_type "NOT NULL"
+        string old_status "NULL"
+        string new_status "NOT NULL"
+        string description "NOT NULL"
+        timestamp logged_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+```
+
+### Relational Hierarchy (3NF Specification):
 ```
                         ┌────────────────────────┐
                         │         users          │ (Generalization Entity)
